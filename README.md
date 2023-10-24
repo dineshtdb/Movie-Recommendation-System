@@ -5,6 +5,7 @@
 
 All preprocessing, EDA, and ML steps, initially conducted on Google Colab, can be found in this notebook:
 > * [ML Notebook](https://github.com/lifeofborna/Movie-Recommendation-System/blob/main/IDS_Project.ipynb)
+> * [Try The App Via Streamlit](https://ids-movie.streamlit.app/)
 
 ## 1. Data
 
