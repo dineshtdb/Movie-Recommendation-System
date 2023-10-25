@@ -115,57 +115,100 @@ def main():
     combined_df, genres_encoded = cluster_movies_by_genre(combined_df)
 
     st.write("Discover movies similar to your favorites!")
+    auto_trigger = False
+    
+    if 'recommendations' not in st.session_state:
+        st.session_state.recommendations = []
+    if 'potential_matches' not in st.session_state:
+        st.session_state.potential_matches = []
+    if 'movie_input' not in st.session_state:
+        st.session_state.movie_input = ""
+    if 'reset_triggered' not in st.session_state:
+        st.session_state.reset_triggered = False
+    if 'surprise_triggered' not in st.session_state:
+        st.session_state.surprise_triggered = False
 
-    movie_title = st.text_input("🔍 Enter your favorite movie:", value="", key="movie_input")
+    # If reset was triggered, set the default value of the input widget to an empty string
+    default_value = "" if st.session_state.reset_triggered else st.session_state.movie_input
 
-    if movie_title:  
+    new_input = st.text_input("🔍 Enter your favorite movie:", value=default_value, key="movie_input")
+
+    # If there's a change in input, update the session state
+    if new_input != st.session_state.movie_input:
+        st.session_state.movie_input = new_input
+        st.session_state.reset_triggered = False  
+
+    movie_title = st.session_state.movie_input
+
+    if movie_title:
         exact_match = combined_df[combined_df['Title'] == movie_title]
-
+        
         if exact_match.empty:  # If exact match doesn't exist, then suggest potential matches
-            potential_matches = combined_df[combined_df['Title'].str.contains(movie_title, case=False, na=False)]['Title'].tolist()
-            if potential_matches:
-                selected_title = st.selectbox("Did you mean one of these?", potential_matches)
-                movie_title = selected_title if selected_title else movie_title
+            st.session_state.potential_matches = combined_df[combined_df['Title'].str.contains(movie_title, case=False, na=False)]['Title'].tolist()
+            
+            if st.session_state.potential_matches:
+                selected_title = st.selectbox("Did you mean one of these?", st.session_state.potential_matches)
+                if selected_title:
+                    movie_title = selected_title
+                    auto_trigger = True  # Setting the flag to trigger automatic recommendations
+    col1, col2, col3 = st.columns(3)
 
-    if st.button('Get Recommendations',key='btn_get_recommendations') or st.button('Surprise Me!',key='btn_surprise_me'):
-        if not movie_title or st.button('Surprise Me!'):
-            movie_title = random.choice(combined_df['Title'].tolist())
-
+    if col1.button('Get Recommendations', key='btn_get_recommendations') or auto_trigger:
         with st.spinner('Fetching recommendations...'):
-            recommendations = recommend_movies_nearest_updated_cosine(
+            st.session_state.recommendations = recommend_movies_nearest_updated_cosine(
                 movie_title, genres_encoded=genres_encoded, combined_df=combined_df
             )
-            
-            if recommendations:
-                st.subheader("Recommended Movies:")
+        display_recommendations(st.session_state.recommendations)
 
-                cols = st.columns(len(recommendations))
+    if col2.button('Surprise Me!', key='btn_surprise_me'):
+        st.session_state.recommendations = []
+        st.session_state.potential_matches = []  # Clearing potential matches on reset
+        st.session_state.reset_triggered = True 
 
-                for idx, movie in enumerate(recommendations):
-                    movie_details = fetch_movie_details(movie)
+        movie_title = random.choice(combined_df['Title'].tolist())
+        with st.spinner('Fetching recommendations...'):
+            st.session_state.recommendations = recommend_movies_nearest_updated_cosine(
+                movie_title, genres_encoded=genres_encoded, combined_df=combined_df
+            )
+        display_recommendations(st.session_state.recommendations)
 
-                    with cols[idx]:
-                        st.markdown(
-                            f"""
-                            <div class="movie-card">
-                                <div style="overflow: hidden; border-radius: 10px;">
-                                    <img src="{movie_details['poster']}" alt="{movie}" style="width: 150px; height: 225px; object-fit: cover;">
-                                </div>
-                                <a href="https://www.themoviedb.org/movie/{movie_details['id']}" target="_blank">
-                                    <div class="movie-title">{movie}</div>
-                                </a>
-                                <p class="movie-info">{movie_details['release_date']} | {movie_details['genres']} | Rating: {movie_details['rating']}</p>
-                                <details>
-                                    <summary>Overview</summary>
-                                    {movie_details['overview']}
-                                </details>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-            else:
-                st.error("Couldn't find any recommendations for that movie.")
+    if col3.button("Reset", key="btn_reset"):
+        st.session_state.recommendations = []
+        st.session_state.potential_matches = []  # Clearing potential matches on reset
+        st.session_state.reset_triggered = True  # Set the reset flag
+        st.experimental_rerun()
 
+
+def display_recommendations(recommendations):
+    if recommendations:
+        st.subheader("Recommended Movies:")
+
+        cols = st.columns(len(recommendations))
+
+        for idx, movie in enumerate(recommendations):
+            movie_details = fetch_movie_details(movie)
+
+            with cols[idx]:
+                st.markdown(
+                    f"""
+                    <div class="movie-card">
+                        <div style="overflow: hidden; border-radius: 10px;">
+                            <img src="{movie_details['poster']}" alt="{movie}" style="width: 150px; height: 225px; object-fit: cover;">
+                        </div>
+                        <a href="https://www.themoviedb.org/movie/{movie_details['id']}" target="_blank">
+                            <div class="movie-title">{movie}</div>
+                        </a>
+                        <p class="movie-info">{movie_details['release_date']} | {movie_details['genres']} | Rating: {movie_details['rating']}</p>
+                        <details>
+                            <summary>Overview</summary>
+                            {movie_details['overview']}
+                        </details>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+    else:
+        st.error("Couldn't find any recommendations for that movie.")
 
 
 if __name__ == "__main__":
